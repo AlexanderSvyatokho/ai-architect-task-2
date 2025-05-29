@@ -1,12 +1,24 @@
-FROM python:3.11-slim
+# Use official Ollama image
+FROM ollama/ollama:latest
 
-# Install dependencies
+# Set working directory
 WORKDIR /app
+
+# Copy the app and dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY src/ ./src/
+COPY start.sh .
 
-# Copy source code
-COPY src/ ./src
+# Install Python + dependencies
+RUN apt-get update && \
+    apt-get install -y python3 python3-pip && \
+    pip3 install --no-cache-dir -r requirements.txt
 
-# Set entrypoint
-CMD ["python", "src/rag.py"]
+# Make the script executable
+RUN chmod +x start.sh
+
+# Override default ENTRYPOINT from ollama/ollama
+ENTRYPOINT []
+
+# Set the command to run the application
+CMD ["./start.sh"]
