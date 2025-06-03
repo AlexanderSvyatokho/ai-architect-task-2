@@ -7,6 +7,7 @@ WORKDIR /app
 # Copy the app and dependencies
 COPY requirements.txt .
 COPY src/ ./src/
+COPY data/ ./data/
 COPY start.sh .
 
 # Install Python + dependencies
