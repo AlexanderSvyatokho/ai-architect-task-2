@@ -1,18 +1,37 @@
 print("Starting the Ollama RAG example...")
 
 import re
+import chromadb
 from openai import OpenAI
+from tqdm import tqdm
 
 OLLAMA_API = "http://localhost:11434/v1"
 MODEL = "llama3.2"
+EMBED_MODEL = "nomic-embed-text" 
+
+ollama_client = OpenAI(base_url=OLLAMA_API, api_key='ollama')
+chroma_client = chromadb.Client()
 
 def prepare_rag_index():
     print("Preparing RAG index...")
+
+    # 1. Read the file
     text = read_file()
+
+    # 2. Split by sections based on headers
     chunks = split_by_headers(text)
     # for i, chunk in enumerate(chunks):
     #     print(f"Chunk {i+1}: {chunk['header']}")
-    #     print(f"Content: {chunk['content'][:10000]}...")
+    #     print(f"Content: {chunk['content'][:100]}...")
+
+    # 3. Create embeddings for each chunk
+    texts = [chunk['text'] for chunk in chunks]
+    embeddings = create_embeddings(texts)
+    # for i, embedding in enumerate(embeddings):
+    #     print(f"Embedding {i+1}: {embedding[:10]}...")
+
+    # 4. Store in vector database
+    collection = store_in_vector_db(chunks, embeddings)
 
 def read_file():
     file_path = "data/node-best-practices.md"
@@ -62,14 +81,48 @@ def split_by_headers(text):
     print(f"Created {len(chunks)} chunks")
     return chunks
 
+def create_embeddings(texts):
+    print("Creating embeddings...")
+    embeddings = []
+    
+    for i, text in tqdm(enumerate(texts)):
+        # Create embedding using Ollama API
+        response = ollama_client.embeddings.create(
+            model=EMBED_MODEL,
+            input=text
+        )
+        embeddings.append(response.data[0].embedding)
+    
+    return embeddings
+
+def store_in_vector_db(chunks, embeddings):
+    print("Storing in vector database...")
+    
+    # Create collection
+    collection = chroma_client.create_collection("nodejs_best_practices")
+    
+    # Prepare data for Chroma
+    ids = [f"chunk_{i}" for i in range(len(chunks))]
+    documents = [chunk['text'] for chunk in chunks]
+    metadatas = [{'header': chunk['header']} for chunk in chunks]
+    
+    # Add to collection
+    collection.add(
+        embeddings=embeddings,
+        documents=documents,
+        metadatas=metadatas,
+        ids=ids
+    )
+    
+    print(f"Stored {len(chunks)} chunks in vector database")
+    return collection
+
 def test_prompt():
     messages = [
         {"role": "user", "content": "Describe some of the business applications of Generative AI"}
     ]
 
-    ollama_via_openai = OpenAI(base_url=OLLAMA_API, api_key='ollama')
-
-    response = ollama_via_openai.chat.completions.create(
+    response = ollama_client.chat.completions.create(
         model=MODEL,
         messages=messages,
         stream=True
