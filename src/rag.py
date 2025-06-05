@@ -8,9 +8,11 @@ from tqdm import tqdm
 OLLAMA_API = "http://localhost:11434/v1"
 MODEL = "llama3.2"
 EMBED_MODEL = "nomic-embed-text" 
+RAG_RESULTS = 3 # number of results to return from RAG
 
 ollama_client = OpenAI(base_url=OLLAMA_API, api_key='ollama')
 chroma_client = chromadb.Client()
+collection = chroma_client.create_collection("nodejs_best_practices")
 
 def prepare_rag_index():
     print("Preparing RAG index...")
@@ -31,7 +33,7 @@ def prepare_rag_index():
     #     print(f"Embedding {i+1}: {embedding[:10]}...")
 
     # 4. Store in vector database
-    collection = store_in_vector_db(chunks, embeddings)
+    store_in_vector_db(chunks, embeddings)
 
 def read_file():
     file_path = "data/node-best-practices.md"
@@ -97,10 +99,7 @@ def create_embeddings(texts):
 
 def store_in_vector_db(chunks, embeddings):
     print("Storing in vector database...")
-    
-    # Create collection
-    collection = chroma_client.create_collection("nodejs_best_practices")
-    
+       
     # Prepare data for Chroma
     ids = [f"chunk_{i}" for i in range(len(chunks))]
     documents = [chunk['text'] for chunk in chunks]
@@ -115,7 +114,43 @@ def store_in_vector_db(chunks, embeddings):
     )
     
     print(f"Stored {len(chunks)} chunks in vector database")
-    return collection
+
+def query_rag(collection, question):
+    print(f"\nQuerying: {question}")
+    
+    # Create embedding for the question
+    question_response = ollama_client.embeddings.create(
+        model=EMBED_MODEL,
+        input=question
+    )
+    question_embedding = question_response.data[0].embedding
+    
+    # Search similar chunks
+    results = collection.query(
+        query_embeddings=[question_embedding],
+        n_results=RAG_RESULTS
+    )
+    
+    # Get relevant context
+    context = "\n\n".join(results['documents'][0])
+
+    # Create prompt with context
+    prompt = f"""Based on the following Node.js best practices documentation, answer the question.
+
+Context:
+{context}
+
+Question: {question}
+
+Answer:"""
+    
+    # Get response from LLM
+    response = ollama_client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    
+    return response.choices[0].message.content
 
 def test_prompt():
     messages = [
@@ -133,6 +168,21 @@ def test_prompt():
             print(chunk.choices[0].delta.content, end='', flush=True)
     print()  # for a newline after streaming is done
 
+def test_rag():
+    questions = [
+        "How should I document API errors?",
+        "Is it okay to use var in Node.js?",
+        "How should I organize my tests?",
+        "How do I mock external services in tests?"
+    ]
+    
+    for question in questions:
+        answer = query_rag(collection, question)
+        print(f"\nQ: {question}")
+        print(f"A: {answer}")
+        print("-" * 50)
+
 # test_prompt()
 
 prepare_rag_index()
+test_rag()
