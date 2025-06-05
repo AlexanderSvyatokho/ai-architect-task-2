@@ -2,6 +2,8 @@
 
 This is a simple demonstration of the RAG system, with in-memory vector database and locally running LLM.
 
+The RAG system provides consultation on Node.js best practices taken from the specific documentation.
+
 How it works:
 1. The input data for RAG is an MD file with Node.js best practices taken from https://github.com/goldbergyoni/nodebestpractices. The copy of the MD file is stored in `data/node-best-practices.md`
 1. The input file is split by sections during the startup, embeddings are created and stored in-memory
