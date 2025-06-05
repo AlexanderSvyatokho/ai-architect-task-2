@@ -1,5 +1,3 @@
-print("Starting the Ollama RAG example...")
-
 import re
 import chromadb
 from openai import OpenAI
@@ -116,8 +114,6 @@ def store_in_vector_db(chunks, embeddings):
     print(f"Stored {len(chunks)} chunks in vector database")
 
 def query_rag(collection, question):
-    print(f"\nQuerying: {question}")
-    
     # Create embedding for the question
     question_response = ollama_client.embeddings.create(
         model=EMBED_MODEL,
@@ -135,7 +131,7 @@ def query_rag(collection, question):
     context = "\n\n".join(results['documents'][0])
 
     # Create prompt with context
-    prompt = f"""Based on the following Node.js best practices documentation, answer the question.
+    prompt = f"""Based on the following Node.js best practices documentation, answer the question. If the answer is not in the documentation, say "Sorry, I can't answer based on the available documentation".
 
 Context:
 {context}
@@ -147,33 +143,21 @@ Answer:"""
     # Get response from LLM
     response = ollama_client.chat.completions.create(
         model=MODEL,
-        messages=[{"role": "user", "content": prompt}]
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant that provides answers about Node.js best practices based on the provided documentation."},
+            {"role": "user", "content": prompt}
+        ]
     )
     
     return response.choices[0].message.content
 
-def test_prompt():
-    messages = [
-        {"role": "user", "content": "Describe some of the business applications of Generative AI"}
-    ]
-
-    response = ollama_client.chat.completions.create(
-        model=MODEL,
-        messages=messages,
-        stream=True
-    )
-
-    for chunk in response:
-        if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-            print(chunk.choices[0].delta.content, end='', flush=True)
-    print()  # for a newline after streaming is done
-
 def test_rag():
+    print("\n\n*** Testing RAG system with sample questions... ***")
+
     questions = [
         "How should I document API errors?",
         "Is it okay to use var in Node.js?",
-        "How should I organize my tests?",
-        "How do I mock external services in tests?"
+        "How should I organize my tests?"
     ]
     
     for question in questions:
@@ -182,7 +166,20 @@ def test_rag():
         print(f"A: {answer}")
         print("-" * 50)
 
-# test_prompt()
+    print("*** Testing complete. You can now interact with the RAG system. ***\n\n")
+
+def chat_loop():
+    print("Welcome to the Node.js Best Practices RAG system!")
+    print("Type 'exit' to quit.")
+    
+    while True:
+        question = input("\nEnter your question: ")
+        if question.lower() == 'exit':
+            break
+        answer = query_rag(collection, question)
+        print(f"\nAnswer: {answer}")
+        print("-" * 50)
 
 prepare_rag_index()
 test_rag()
+chat_loop()
